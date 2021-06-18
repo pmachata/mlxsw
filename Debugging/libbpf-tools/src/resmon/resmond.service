@@ -1,0 +1,7 @@
+[Unit]
+Description=mlxsw resource monitor
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/resmon start
+ExecStop=/usr/local/bin/resmon stop
