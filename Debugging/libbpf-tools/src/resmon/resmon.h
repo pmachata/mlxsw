@@ -72,6 +72,7 @@ int resmon_jrpc_take_send(struct resmon_sock *sock, struct json_object *obj);
 
 /* resmon-c.c */
 
+int resmon_c_ping(int argc, char **argv);
 int resmon_c_stop(int argc, char **argv);
 
 /* resmon-back.c */
