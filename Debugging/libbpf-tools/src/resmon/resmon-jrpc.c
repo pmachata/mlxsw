@@ -335,6 +335,101 @@ int resmon_jrpc_dissect_params_empty(struct json_object *obj,
 	return resmon_jrpc_dissect(obj, NULL, NULL, NULL, 0, error);
 }
 
+static int
+resmon_jrpc_dissect_stats_counter(struct json_object *counter_obj,
+				  struct resmon_jrpc_counter *pcounter,
+				  char **error)
+{
+	enum {
+		pol_id,
+		pol_descr,
+		pol_value,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_id] = 	{ .key = "id", .type = json_type_int,
+				  .required = true },
+		[pol_descr] = 	{ .key = "descr", .type = json_type_string,
+				  .required = true },
+		[pol_value] = 	{ .key = "value", .type = json_type_int,
+				  .required = true },
+	};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	int err = resmon_jrpc_dissect(counter_obj, policy, seen, values,
+				      ARRAY_SIZE(policy), error);
+	if (err)
+		return err;
+
+	*pcounter = (struct resmon_jrpc_counter) {
+		.descr = json_object_get_string(values[pol_descr]),
+		.value = json_object_get_int64(values[pol_value]),
+	};
+	return 0;
+}
+
+static int
+resmon_jrpc_dissect_stats_counters(struct json_object *counters_array,
+				   struct resmon_jrpc_counter **pcounters,
+				   size_t *pnum_counters, char **error)
+{
+	size_t counters_array_len = json_object_array_length(counters_array);
+	struct resmon_jrpc_counter *counters = calloc(counters_array_len,
+						      sizeof(*counters));
+
+	if (counters == NULL) {
+		asprintf(error, "Couldn't allocate counters: %m");
+		return -1;
+	}
+
+	for (size_t i = 0; i < counters_array_len; i++) {
+		struct json_object *counter_obj =
+			json_object_array_get_idx(counters_array, i);
+		struct resmon_jrpc_counter *counter = &counters[i];
+		int err = resmon_jrpc_dissect_stats_counter(counter_obj,
+							    counter, error);
+		if (err != 0)
+			goto free_counters;
+	}
+
+	*pcounters = counters;
+	*pnum_counters = counters_array_len;
+	return 0;
+
+free_counters:
+	free(counters);
+	return -1;
+}
+
+int resmon_jrpc_dissect_stats(struct json_object *obj,
+			      struct resmon_jrpc_counter **counters,
+			      size_t *num_counters,
+			      char **error)
+{
+	/* result for query with "stats" method supposed to looks like:
+	 * { { "counters": [ { "id": a, "descr": "b", "value": c },
+	 *                   { "id": d, "descr": "e", "value": f }...}
+	 * First, verify that "counters" key appears and then verify each object
+	 * in the array.
+	 */
+	enum {
+		pol_counters,
+	};
+	struct resmon_jrpc_policy policy[] = {
+		[pol_counters] = { .key = "counters", .type = json_type_array,
+				   .required = true },
+	};
+	bool seen[ARRAY_SIZE(policy)] = {};
+	struct json_object *values[ARRAY_SIZE(policy)] = {};
+	int err = resmon_jrpc_dissect(obj, policy, seen, values,
+				      ARRAY_SIZE(policy), error);
+	if (err)
+		return err;
+
+	return resmon_jrpc_dissect_stats_counters(values[pol_counters],
+						  counters, num_counters,
+						  error);
+}
+
 int resmon_jrpc_take_send(struct resmon_sock *sock, struct json_object *obj)
 {
 	const char *str = json_object_to_json_string(obj);

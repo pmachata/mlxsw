@@ -17,7 +17,7 @@ static int resmon_help(void)
 	     "Usage: resmon [OPTIONS] { COMMAND | help }\n"
 	     "where  OPTIONS := [ -h | --help | -q | --quiet | -v | --verbose |\n"
 	     "			  -V | --version ]\n"
-	     "	     COMMAND := { start | stop | ping }\n"
+	     "	     COMMAND := { start | stop | ping | stats }\n"
 	     );
 	return 0;
 }
@@ -35,6 +35,9 @@ static int resmon_cmd(int argc, char **argv)
 	} else if (strcmp(*argv, "ping") == 0) {
 		NEXT_ARG_FWD();
 		return resmon_c_ping(argc, argv);
+	} else if (strcmp(*argv, "stats") == 0) {
+		NEXT_ARG_FWD();
+		return resmon_c_stats(argc, argv);
 	}
 
 	fprintf(stderr, "Unknown command \"%s\"\n", *argv);

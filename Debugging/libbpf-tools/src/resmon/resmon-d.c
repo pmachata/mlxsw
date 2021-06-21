@@ -133,7 +133,118 @@ put_obj:
 	resmon_d_respond_memerr(peer, id);
 }
 
+static const char *const resmon_d_counter_descriptions[] = {
+	RESMON_COUNTERS(RESMON_COUNTER_EXPAND_AS_DESC)
+};
+
+static int resmon_d_stats_attach_counter(struct json_object *counters_obj,
+					 int counter, int64_t value)
+{
+	int rc;
+	struct json_object *counter_obj = json_object_new_object();
+	if (counter_obj == NULL)
+		return -1;
+
+	rc = resmon_jrpc_object_take_add(counter_obj, "id",
+					 json_object_new_int(counter));
+	if (rc)
+		goto put_counter_obj;
+
+	const char *descr = resmon_d_counter_descriptions[counter];
+	rc = resmon_jrpc_object_take_add(counter_obj, "descr",
+					 json_object_new_string(descr));
+
+	if (rc)
+		goto put_counter_obj;
+
+	rc = resmon_jrpc_object_take_add(counter_obj, "value",
+					 json_object_new_int64(value));
+	if (rc)
+		goto put_counter_obj;
+
+	rc = json_object_array_add(counters_obj, counter_obj);
+	if (rc)
+		goto put_counter_obj;
+
+	return 0;
+
+put_counter_obj:
+	json_object_put(counter_obj);
+	return -1;
+}
+
+static void resmon_d_handle_stats(struct resmon_stat *stat,
+				  struct resmon_sock *peer,
+				  struct json_object *params_obj,
+				  struct json_object *id)
+{
+	/* The response is as follows:
+	 *
+	 * {
+	 *     "id": ...,
+	 *     "result": {
+	 *         "counters": [
+	 *             {
+	 *                 "id": counter number as per enum resmon_counter,
+	 *                 "description": string with human-readable descr.,
+	 *                 "value": integer, value of the counter
+	 *             },
+	 *             ....
+	 *         ]
+	 *     }
+	 * }
+	 */
+
+	char *error;
+	int rc = resmon_jrpc_dissect_params_empty(params_obj, &error);
+	if (rc) {
+		resmon_d_respond_invalid_params(peer, error);
+		free(error);
+		return;
+	}
+
+	struct json_object *obj = resmon_jrpc_new_object(id);
+	if (obj == NULL)
+		return;
+
+	struct json_object *result_obj = json_object_new_object();
+	if (result_obj == NULL)
+		goto put_obj;
+
+	struct json_object *counters_obj = json_object_new_array();
+	if (counters_obj == NULL)
+		goto put_result_obj;
+
+	struct resmon_stat_counters counters = resmon_stat_counters(stat);
+	for (int i = 0; i < ARRAY_SIZE(counters.values); i++) {
+		int rc = resmon_d_stats_attach_counter(counters_obj, i,
+						       counters.values[i]);
+		if (rc)
+			goto put_counters_obj;
+	}
+
+	if (resmon_jrpc_object_take_add(result_obj, "counters",
+					counters_obj))
+		goto put_result_obj;
+
+	if (resmon_jrpc_object_take_add(obj, "result",
+					result_obj))
+		goto put_obj;
+
+	resmon_jrpc_take_send(peer, obj);
+	return;
+
+put_counters_obj:
+	json_object_put(counters_obj);
+put_result_obj:
+	json_object_put(result_obj);
+put_obj:
+	json_object_put(obj);
+	resmon_d_respond_memerr(peer, id);
+}
+
 static void resmon_d_handle_method(struct resmon_back *back,
+				   struct resmon_stat *stat,
 				   struct resmon_sock *peer,
 				   const char *method,
 				   struct json_object *params_obj,
@@ -143,11 +254,14 @@ static void resmon_d_handle_method(struct resmon_back *back,
 		return resmon_d_handle_quit(peer, params_obj, id);
 	else if (strcmp(method, "ping") == 0)
 		return resmon_d_handle_ping(peer, params_obj, id);
+	else if (strcmp(method, "stats") == 0)
+		return resmon_d_handle_stats(stat, peer, params_obj, id);
 	else
 		return resmon_d_respond_method_nf(peer, id, method);
 }
 
 static int resmon_d_ctl_activity(struct resmon_back *back,
+				 struct resmon_stat *stat,
 				 struct resmon_sock *ctl)
 {
 	int err;
@@ -179,7 +293,7 @@ static int resmon_d_ctl_activity(struct resmon_back *back,
 		goto put_req_obj;
 	}
 
-	resmon_d_handle_method(back, &peer, method, params, id);
+	resmon_d_handle_method(back, stat, &peer, method, params, id);
 
 put_req_obj:
 	json_object_put(request_obj);
@@ -188,7 +302,7 @@ free_req:
 	return 0;
 }
 
-static int resmon_d_loop(struct resmon_back *back)
+static int resmon_d_loop(struct resmon_back *back, struct resmon_stat *stat)
 {
 	int err;
 
@@ -237,7 +351,8 @@ static int resmon_d_loop(struct resmon_back *back)
 			if (pollfd->revents & POLLIN) {
 				switch (i) {
 				case pollfd_ctl:
-					err = resmon_d_ctl_activity(back, &ctl);
+					err = resmon_d_ctl_activity(back, stat,
+								    &ctl);
 					if (err != 0)
 						goto out;
 					break;
@@ -255,16 +370,22 @@ static int resmon_d_do_start(const struct resmon_back_cls *back_cls)
 {
 	int err = 0;
 
+	struct resmon_stat *stat = resmon_stat_create();
+	if (stat == NULL)
+		return -1;
+
 	struct resmon_back *back = back_cls->init();
 	if (back == NULL)
-		return -1;
+		goto destroy_stat;
 
 	openlog("resmon", LOG_PID | LOG_CONS, LOG_USER);
 
-	err = resmon_d_loop(back);
+	err = resmon_d_loop(back, stat);
 
 	closelog();
 	back_cls->fini(back);
+destroy_stat:
+	resmon_stat_destroy(stat);
 	return err;
 }
 

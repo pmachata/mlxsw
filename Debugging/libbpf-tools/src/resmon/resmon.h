@@ -65,6 +65,16 @@ int resmon_jrpc_dissect_error(struct json_object *obj,
 			      char **error);
 int resmon_jrpc_dissect_params_empty(struct json_object *obj,
 				     char **error);
+
+struct resmon_jrpc_counter {
+	const char *descr;
+	int64_t value;
+};
+int resmon_jrpc_dissect_stats(struct json_object *obj,
+			      struct resmon_jrpc_counter **counters,
+			      size_t *num_counters,
+			      char **error);
+
 int resmon_jrpc_object_take_add(struct json_object *obj,
 				const char *key, struct json_object *val_obj);
 
@@ -74,6 +84,29 @@ int resmon_jrpc_take_send(struct resmon_sock *sock, struct json_object *obj);
 
 int resmon_c_ping(int argc, char **argv);
 int resmon_c_stop(int argc, char **argv);
+int resmon_c_stats(int argc, char **argv);
+
+/* resmon-stat.c */
+
+#define RESMON_COUNTER_EXPAND_AS_ENUM(NAME, DESCRIPTION) \
+	RESMON_COUNTER_ ## NAME,
+#define RESMON_COUNTER_EXPAND_AS_DESC(NAME, DESCRIPTION) \
+	DESCRIPTION,
+#define EXPAND_AS_PLUS1(...) + 1
+
+#define RESMON_COUNTERS(X)
+
+enum { resmon_counter_count = 0 RESMON_COUNTERS(EXPAND_AS_PLUS1) };
+
+struct resmon_stat;
+
+struct resmon_stat_counters {
+	int64_t values[resmon_counter_count];
+};
+
+struct resmon_stat *resmon_stat_create(void);
+void resmon_stat_destroy(struct resmon_stat *stat);
+struct resmon_stat_counters resmon_stat_counters(struct resmon_stat *stat);
 
 /* resmon-back.c */
 
