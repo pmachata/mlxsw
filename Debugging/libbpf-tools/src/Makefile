@@ -7,7 +7,7 @@ INCLUDES := -I$(OUTPUT) $(LIBBPF_INCLUDE) $(COMMON_INCLUDE)
 CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
-APPS = emadlatency emadump trapagg
+APPS = emadlatency emadump trapagg resmon/resmon
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -40,7 +40,7 @@ clean:
 	$(call msg,CLEAN)
 	$(Q)rm -rf $(OUTPUT) $(APPS)
 
-$(OUTPUT):
+$(OUTPUT) $(OUTPUT)/resmon:
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
@@ -57,8 +57,13 @@ $(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o | $(OUTPUT)
 
 # Build user-space code
 $(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h
+$(OUTPUT)/resmon/resmon.skel.h:
 
 $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
+
+$(OUTPUT)/resmon/%.o: resmon/%.c resmon/resmon.h | $(OUTPUT)/resmon
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
 
@@ -67,6 +72,15 @@ emadlatency trapagg: %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -o $@
 
+resmon/resmon: CFLAGS += $(shell pkgconf --libs libelf json-c libsystemd)
+resmon/resmon:	$(OUTPUT)/resmon/resmon.o \
+		$(OUTPUT)/resmon/resmon-back.o \
+		$(OUTPUT)/resmon/resmon-c.o \
+		$(OUTPUT)/resmon/resmon-d.o \
+		$(OUTPUT)/resmon/resmon-jrpc.o \
+		$(OUTPUT)/resmon/resmon-sock.o
+	$(call msg,BINARY,$@)
+	$(Q)$(CC) $(CFLAGS) -lz $^ -o $@
 emadump: %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -lpcap -o $@
