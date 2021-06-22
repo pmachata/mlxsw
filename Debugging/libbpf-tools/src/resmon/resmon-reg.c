@@ -131,6 +131,41 @@ struct resmon_reg_ptce3 {
 	uint8_t delta_value;
 };
 
+struct resmon_reg_pefa {
+	uint32_be_t __pind_index;
+
+#define resmon_reg_pefa_index(reg) \
+	(uint32_be_toh((reg)->__pind_index) & 0xffffff)
+};
+
+struct resmon_reg_iedr_record {
+	uint8_t type;
+	uint8_t resv1;
+	uint16_be_t __size;
+
+#define resmon_reg_iedr_record_size(rec) (uint16_be_toh((rec)->__size))
+
+	uint32_be_t __index_start;
+
+#define resmon_reg_iedr_record_index_start(rec) \
+	(uint32_be_toh((rec)->__index_start) & 0xffffff)
+};
+
+struct resmon_reg_iedr {
+	uint8_t __bg;
+	uint8_t resv1;
+	uint8_t resv2;
+	uint8_t num_rec;
+
+	uint32_be_t resv3;
+
+	uint32_be_t resv4;
+
+	uint32_be_t resv5;
+
+	struct resmon_reg_iedr_record records[64];
+};
+
 static struct resmon_reg_emad_tl
 resmon_reg_emad_decode_tl(uint16_be_t type_len_be)
 {
@@ -335,6 +370,80 @@ oob:
 	return -1;
 }
 
+static int resmon_reg_handle_pefa(struct resmon_stat *stat,
+				  const uint8_t *payload, size_t payload_len,
+				  char **error)
+{
+	struct resmon_stat_kvd_alloc kvd_alloc = {
+		.slots = 1,
+		.counter = RESMON_COUNTER_ACTSET,
+	};
+	const struct resmon_reg_pefa *reg;
+	int rc;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	rc = resmon_stat_kvdl_alloc(stat, resmon_reg_pefa_index(reg),
+				    kvd_alloc);
+	return resmon_reg_insert_rc(rc, error);
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
+static int resmon_reg_handle_iedr_record(struct resmon_stat *stat,
+					 struct resmon_reg_iedr_record record)
+{
+	enum resmon_counter counter;
+	uint32_t index;
+	uint32_t size;
+
+	switch (record.type) {
+	case 0x23:
+		counter = RESMON_COUNTER_ACTSET;
+		break;
+	default:
+		return 0;
+	}
+
+	index = resmon_reg_iedr_record_index_start(&record);
+	size = resmon_reg_iedr_record_size(&record);
+	return resmon_stat_kvdl_free(stat, index,
+				     (struct resmon_stat_kvd_alloc) {
+						.slots = size,
+						.counter = counter,
+				     });
+}
+
+static int resmon_reg_handle_iedr(struct resmon_stat *stat,
+				  const uint8_t *payload, size_t payload_len,
+				  char **error)
+{
+	const struct resmon_reg_iedr *reg;
+	int rc = 0;
+	int rc_1;
+
+	reg = RESMON_REG_READ(sizeof(*reg), payload, payload_len);
+
+	if (reg->num_rec > ARRAY_SIZE(reg->records)) {
+		resmon_fmterr(error, "EMAD malformed: Inconsistent register");
+		return -1;
+	}
+
+	for (size_t i = 0; i < reg->num_rec; i++) {
+		rc_1 = resmon_reg_handle_iedr_record(stat, reg->records[i]);
+		if (rc_1 != 0)
+			rc = rc_1;
+	}
+
+	return resmon_reg_delete_rc(rc, error);
+
+oob:
+	resmon_reg_err_payload_truncated(error);
+	return -1;
+}
+
 int resmon_reg_process_emad(struct resmon_stat *stat,
 			    const uint8_t *buf, size_t len, char **error)
 {
@@ -371,6 +480,10 @@ int resmon_reg_process_emad(struct resmon_stat *stat,
 		return resmon_reg_handle_ptar(stat, buf, len, error);
 	case MLXSW_REG_PTCE3_ID:
 		return resmon_reg_handle_ptce3(stat, buf, len, error);
+	case MLXSW_REG_PEFA_ID:
+		return resmon_reg_handle_pefa(stat, buf, len, error);
+	case MLXSW_REG_IEDR_ID:
+		return resmon_reg_handle_iedr(stat, buf, len, error);
 	}
 
 	resmon_fmterr(error, "EMAD malformed: Unknown register");

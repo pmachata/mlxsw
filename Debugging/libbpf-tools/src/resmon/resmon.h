@@ -127,7 +127,8 @@ int resmon_c_stats(int argc, char **argv);
 #define RESMON_COUNTERS(X) \
 	X(LPM_IPV4, "IPv4 LPM") \
 	X(LPM_IPV6, "IPv6 LPM") \
-	X(ATCAM, "ATCAM")
+	X(ATCAM, "ATCAM") \
+	X(ACTSET, "ACL Action Set")
 
 enum resmon_counter {
 	RESMON_COUNTERS(RESMON_COUNTER_EXPAND_AS_ENUM)
@@ -199,6 +200,13 @@ int resmon_stat_ptce3_free(struct resmon_stat *stat,
 		       uint8_t delta_value,
 		       uint16_t delta_start,
 		       uint8_t erp_id);
+
+int resmon_stat_kvdl_alloc(struct resmon_stat *stat,
+			   uint32_t index,
+			   struct resmon_stat_kvd_alloc kvd_alloc);
+int resmon_stat_kvdl_free(struct resmon_stat *stat,
+			  uint32_t index,
+			  struct resmon_stat_kvd_alloc kvd_alloc);
 
 /* resmon-back.c */
 
