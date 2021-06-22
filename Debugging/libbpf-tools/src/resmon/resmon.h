@@ -124,7 +124,13 @@ int resmon_c_stats(int argc, char **argv);
 	RESMON_COUNTER_ ## NAME,
 #define EXPAND_AS_PLUS1(...) + 1
 
-#define RESMON_COUNTERS(X)
+#define RESMON_COUNTERS(X) \
+	X(LPM_IPV4, "IPv4 LPM") \
+	X(LPM_IPV6, "IPv6 LPM")
+
+enum resmon_counter {
+	RESMON_COUNTERS(RESMON_COUNTER_EXPAND_AS_ENUM)
+};
 
 enum { resmon_counter_count = 0 RESMON_COUNTERS(EXPAND_AS_PLUS1) };
 
@@ -135,9 +141,30 @@ struct resmon_stat_counters {
 	int64_t total;
 };
 
+struct resmon_stat_dip {
+	uint8_t dip[16];
+};
+
+struct resmon_stat_kvd_alloc {
+	unsigned int slots;
+	enum resmon_counter counter;
+};
+
 struct resmon_stat *resmon_stat_create(void);
 void resmon_stat_destroy(struct resmon_stat *stat);
 struct resmon_stat_counters resmon_stat_counters(struct resmon_stat *stat);
+
+int resmon_stat_ralue_update(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint8_t prefix_len,
+			     uint16_t virtual_router,
+			     struct resmon_stat_dip dip,
+			     struct resmon_stat_kvd_alloc kvda);
+int resmon_stat_ralue_delete(struct resmon_stat *stat,
+			     enum mlxsw_reg_ralxx_protocol protocol,
+			     uint8_t prefix_len,
+			     uint16_t virtual_router,
+			     struct resmon_stat_dip dip);
 
 /* resmon-back.c */
 
