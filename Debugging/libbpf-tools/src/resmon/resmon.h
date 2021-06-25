@@ -243,6 +243,8 @@ struct resmon_back_cls {
 			      struct resmon_sock *peer,
 			      struct json_object *params_obj,
 			      struct json_object *id);
+	int (*pollfd)(struct resmon_back *back);
+	int (*activity)(struct resmon_back *back, struct resmon_stat *stat);
 };
 
 extern const struct resmon_back_cls resmon_back_cls_hw;
