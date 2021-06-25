@@ -65,14 +65,22 @@ $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
 	$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
 
+$(OUTPUT)/resmon/%.bpf.o: resmon/%.bpf.c $(LIBBPF_OBJ) \
+			  resmon/resmon.h vmlinux.h | $(OUTPUT)/resmon
+	$(call msg,BPF,$@)
+	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
+	$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
+
 # Generate BPF skeletons
 $(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o | $(OUTPUT)
+	$(call msg,GEN-SKEL,$@)
+	$(Q)$(BPFTOOL) gen skeleton $< > $@
+$(OUTPUT)/resmon/%.skel.h: $(OUTPUT)/resmon/%.bpf.o | $(OUTPUT)
 	$(call msg,GEN-SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # Build user-space code
 $(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h
-$(OUTPUT)/resmon/resmon.skel.h:
 
 $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
 	$(call msg,CC,$@)
@@ -99,9 +107,14 @@ resmon/resmon:	$(OUTPUT)/resmon/resmon.o \
 		$(OUTPUT)/resmon/resmon-jrpc.o \
 		$(OUTPUT)/resmon/resmon-reg.o \
 		$(OUTPUT)/resmon/resmon-sock.o \
-		$(OUTPUT)/resmon/resmon-stat.o
+		$(OUTPUT)/resmon/resmon-stat.o \
+		$(LIBBPF_OBJ) $(COMMON_OBJ) \
+		| $(OUTPUT)/resmon/resmon.bpf.o
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) -lz $^ -o $@
+$(OUTPUT)/resmon/%.o: INCLUDES += -I$(OUTPUT)/resmon
+$(OUTPUT)/resmon/resmon-back.o: $(OUTPUT)/resmon/resmon.skel.h
+
 emadump: %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -lpcap -o $@
