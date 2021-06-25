@@ -5,6 +5,46 @@
 
 #include "resmon.h"
 
+struct resmon_back_hw {
+	struct resmon_back base;
+};
+
+static struct resmon_back *resmon_back_hw_init(void)
+{
+	struct resmon_back_hw *back;
+
+	back = malloc(sizeof(*back));
+	if (back == NULL)
+		return NULL;
+
+	*back = (struct resmon_back_hw) {
+		.base.cls = &resmon_back_cls_hw,
+	};
+
+	return &back->base;
+}
+
+static void resmon_back_hw_fini(struct resmon_back *base)
+{
+	struct resmon_back_hw *back =
+		container_of(base, struct resmon_back_hw, base);
+
+	free(back);
+}
+
+static int resmon_back_hw_get_capacity(struct resmon_back *back,
+				       uint64_t *capacity,
+				       char **error)
+{
+	return resmon_dl_get_kvd_size(capacity, error);
+}
+
+const struct resmon_back_cls resmon_back_cls_hw = {
+	.init = resmon_back_hw_init,
+	.fini = resmon_back_hw_fini,
+	.get_capacity = resmon_back_hw_get_capacity,
+};
+
 struct resmon_back_mock {
 	struct resmon_back base;
 };

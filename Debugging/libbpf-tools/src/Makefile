@@ -87,11 +87,15 @@ emadlatency trapagg: %: $(OUTPUT)/%.o $(LIBBPF_OBJ) $(COMMON_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -o $@
 
-resmon/resmon: CFLAGS += $(shell pkgconf --libs libelf json-c libsystemd)
+$(OUTPUT)/resmon/resmon-dl.o: \
+	INCLUDES += $(shell pkgconf --cflags libnl-3.0 libnl-genl-3.0)
+resmon/resmon: CFLAGS += $(shell pkgconf --libs libelf json-c libsystemd \
+			   libnl-3.0 libnl-genl-3.0)
 resmon/resmon:	$(OUTPUT)/resmon/resmon.o \
 		$(OUTPUT)/resmon/resmon-back.o \
 		$(OUTPUT)/resmon/resmon-c.o \
 		$(OUTPUT)/resmon/resmon-d.o \
+		$(OUTPUT)/resmon/resmon-dl.o \
 		$(OUTPUT)/resmon/resmon-jrpc.o \
 		$(OUTPUT)/resmon/resmon-reg.o \
 		$(OUTPUT)/resmon/resmon-sock.o \
