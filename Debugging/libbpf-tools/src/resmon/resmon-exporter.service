@@ -1,0 +1,8 @@
+[Unit]
+Description=mlxsw resource monitor exporter
+Requisite=resmon.service
+After=resmon.service
+
+[Service]
+EnvironmentFile=-/etc/sysconfig/resmon-exporter
+ExecStart=/usr/local/bin/resmon-exporter.py $ARGS
