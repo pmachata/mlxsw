@@ -1,0 +1,5 @@
+COMMON_OBJ = \
+	$(OUTPUT)/trace_helpers.o \
+	$(OUTPUT)/map_helpers.o \
+	#
+

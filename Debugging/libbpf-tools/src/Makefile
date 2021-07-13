@@ -3,16 +3,11 @@ OUTPUT := .output
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
 BPFTOOL ?= $(abspath ../tools/bpftool)
-INCLUDES := -I$(OUTPUT) $(LIBBPF_INCLUDE)
+INCLUDES := -I$(OUTPUT) $(LIBBPF_INCLUDE) $(COMMON_INCLUDE)
 CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
 APPS = emadlatency emadump trapagg
-
-COMMON_OBJ = \
-	$(OUTPUT)/trace_helpers.o \
-	$(OUTPUT)/map_helpers.o \
-	#
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
