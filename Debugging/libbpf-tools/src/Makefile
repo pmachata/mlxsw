@@ -78,6 +78,7 @@ resmon/resmon:	$(OUTPUT)/resmon/resmon.o \
 		$(OUTPUT)/resmon/resmon-c.o \
 		$(OUTPUT)/resmon/resmon-d.o \
 		$(OUTPUT)/resmon/resmon-jrpc.o \
+		$(OUTPUT)/resmon/resmon-reg.o \
 		$(OUTPUT)/resmon/resmon-sock.o \
 		$(OUTPUT)/resmon/resmon-stat.o
 	$(call msg,BINARY,$@)
