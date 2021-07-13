@@ -45,6 +45,8 @@ int resmon_sock_recv(struct resmon_sock *sock,
 /* resmon-jrpc.c */
 
 enum resmon_jrpc_e {
+	resmon_jrpc_e_capacity = -1,
+
 	resmon_jrpc_e_inv_request = -32600,
 	resmon_jrpc_e_method_nf = -32601,
 	resmon_jrpc_e_inv_params = -32602,
@@ -90,12 +92,44 @@ int resmon_jrpc_dissect_error(struct json_object *obj,
 int resmon_jrpc_dissect_params_empty(struct json_object *obj,
 				     char **error);
 
+struct resmon_jrpc_counter {
+	const char *descr;
+	int64_t value;
+	uint64_t capacity;
+};
+int resmon_jrpc_dissect_stats(struct json_object *obj,
+			      struct resmon_jrpc_counter **counters,
+			      size_t *num_counters,
+			      char **error);
+
 int resmon_jrpc_send(struct resmon_sock *sock, struct json_object *obj);
 
 /* resmon-c.c */
 
 int resmon_c_ping(int argc, char **argv);
 int resmon_c_stop(int argc, char **argv);
+int resmon_c_stats(int argc, char **argv);
+
+/* resmon-stat.c */
+
+#define RESMON_COUNTER_EXPAND_AS_ENUM(NAME, DESCRIPTION) \
+	RESMON_COUNTER_ ## NAME,
+#define EXPAND_AS_PLUS1(...) + 1
+
+#define RESMON_COUNTERS(X)
+
+enum { resmon_counter_count = 0 RESMON_COUNTERS(EXPAND_AS_PLUS1) };
+
+struct resmon_stat;
+
+struct resmon_stat_counters {
+	int64_t values[resmon_counter_count];
+	int64_t total;
+};
+
+struct resmon_stat *resmon_stat_create(void);
+void resmon_stat_destroy(struct resmon_stat *stat);
+struct resmon_stat_counters resmon_stat_counters(struct resmon_stat *stat);
 
 /* resmon-back.c */
 
@@ -107,6 +141,8 @@ struct resmon_back_cls {
 	struct resmon_back *(*init)(void);
 	void (*fini)(struct resmon_back *back);
 
+	int (*get_capacity)(struct resmon_back *back, uint64_t *capacity,
+			    char **error);
 };
 
 extern const struct resmon_back_cls resmon_back_cls_mock;
@@ -115,6 +151,9 @@ extern const struct resmon_back_cls resmon_back_cls_mock;
 
 int resmon_d_start(int argc, char **argv);
 
+void resmon_d_respond_error(struct resmon_sock *ctl,
+			    struct json_object *id, int code,
+			    const char *message, const char *data);
 void resmon_d_respond_invalid_params(struct resmon_sock *ctl,
 				     struct json_object *id,
 				     const char *data);
