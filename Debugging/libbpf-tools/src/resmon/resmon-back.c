@@ -28,7 +28,16 @@ static void resmon_back_mock_fini(struct resmon_back *back)
 	free(back);
 }
 
+static int resmon_back_mock_get_capacity(struct resmon_back *back,
+					 uint64_t *capacity,
+					 char **error)
+{
+	*capacity = 10000;
+	return 0;
+}
+
 const struct resmon_back_cls resmon_back_cls_mock = {
 	.init = resmon_back_mock_init,
 	.fini = resmon_back_mock_fini,
+	.get_capacity = resmon_back_mock_get_capacity,
 };
